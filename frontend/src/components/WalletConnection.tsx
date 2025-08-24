@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useWeb3 } from '../hooks/useWeb3';
-import { WalletIcon, ChevronDownIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { Button, Dropdown, Card, Space, Typography, Badge, Modal, Alert, Tooltip, message } from 'antd';
+import { WalletOutlined, DownOutlined, CopyOutlined, LinkOutlined, DisconnectOutlined, WarningOutlined } from '@ant-design/icons';
+
+const { Text } = Typography;
 
 const WalletConnection: React.FC = () => {
   const { walletInfo, isConnecting, error, connectWallet, disconnectWallet, switchToSepolia } = useWeb3();
-  const [showDropdown, setShowDropdown] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
 
   const formatAddress = (address: string) => {
@@ -24,156 +26,143 @@ const WalletConnection: React.FC = () => {
     await connectWallet(walletName);
   };
 
+  const handleCopyAddress = () => {
+    navigator.clipboard.writeText(walletInfo.address);
+    message.success('地址已复制到剪贴板');
+  };
+
+  const handleViewOnEtherscan = () => {
+    window.open(`https://sepolia.etherscan.io/address/${walletInfo.address}`, '_blank');
+  };
+
   if (!walletInfo.isConnected) {
     return (
       <>
-        <button
+        <Button
+          type="primary"
+          size="large"
+          icon={<WalletOutlined />}
+          loading={isConnecting}
           onClick={() => setShowWalletModal(true)}
-          disabled={isConnecting}
-          className="px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50
-                     bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-700 hover:to-primary-600 text-white shadow-sm"
+          style={{
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            color: '#ffffff',
+            fontWeight: 600,
+            height: 48,
+            borderRadius: 12,
+            backdropFilter: 'blur(10px)',
+          }}
         >
-          <WalletIcon width={16} height={16} className="shrink-0" />
           {isConnecting ? '连接中...' : '连接钱包'}
-        </button>
+        </Button>
 
-        {/* 钱包选择模态框 */}
-        {showWalletModal && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl w-full max-w-md shadow-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h3 className="text-lg font-semibold">连接钱包</h3>
-                <p className="text-sm text-gray-500 mt-1">选择一种方式连接以太坊钱包</p>
-              </div>
-              <div className="p-6 space-y-3">
-                <button
-                  onClick={() => handleWalletSelect('MetaMask')}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="w-9 h-9 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold">M</div>
-                  <div className="text-left">
-                    <div className="font-medium">MetaMask</div>
-                    <div className="text-xs text-gray-500">浏览器中最常用的钱包</div>
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleWalletSelect('WalletConnect')}
-                  className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="w-9 h-9 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">W</div>
-                  <div className="text-left">
-                    <div className="font-medium">WalletConnect</div>
-                    <div className="text-xs text-gray-500">使用手机钱包扫码连接</div>
-                  </div>
-                </button>
-              </div>
-              <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
-                <button
-                  onClick={() => setShowWalletModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:text-gray-900"
-                >取消</button>
-              </div>
-            </div>
-          </div>
-        )}
+        <Modal
+          title="连接钱包"
+          open={showWalletModal}
+          onCancel={() => setShowWalletModal(false)}
+          footer={null}
+          centered
+          width={400}
+        >
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Card hoverable onClick={() => handleWalletSelect('MetaMask')} style={{ cursor: 'pointer' }}>
+              <Space>
+                <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg, #f6931a 0%, #e4761b 100%)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 'bold', fontSize: 18 }}>M</div>
+                <div>
+                  <Text strong style={{ fontSize: 16 }}>MetaMask</Text><br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>最受欢迎的以太坊钱包</Text>
+                </div>
+              </Space>
+            </Card>
+            <Card hoverable onClick={() => handleWalletSelect('WalletConnect')} style={{ cursor: 'pointer' }}>
+              <Space>
+                <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg, #3b99fc 0%, #1e88e5 100%)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 'bold', fontSize: 18 }}>W</div>
+                <div>
+                  <Text strong style={{ fontSize: 16 }}>WalletConnect</Text><br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>支持多种移动端钱包</Text>
+                </div>
+              </Space>
+            </Card>
+          </Space>
+        </Modal>
 
-        {error && (
-          <div className="mt-2 text-red-600 text-sm">连接失败: {error.message}</div>
-        )}
+        {error && <Alert message="连接失败" description={error.message} type="error" showIcon style={{ marginTop: 16, maxWidth: 300 }} />}
       </>
     );
   }
 
+  const menuItems = [
+    {
+      key: 'copy',
+      icon: <CopyOutlined />,
+      label: '复制地址',
+      onClick: handleCopyAddress,
+    },
+    {
+      key: 'etherscan',
+      icon: <LinkOutlined />,
+      label: '在 Etherscan 查看',
+      onClick: handleViewOnEtherscan,
+    },
+    {
+      type: 'divider',
+    },
+    {
+      key: 'disconnect',
+      icon: <DisconnectOutlined />,
+      label: '断开连接',
+      onClick: disconnectWallet,
+      danger: true,
+    },
+  ];
+
   return (
-    <div className="relative">
-      {/* 网络错误警告 */}
+    <Space size="large">
       {isWrongNetwork && (
-        <div className="absolute -top-12 right-0 bg-yellow-100 border border-yellow-400 text-yellow-700 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
-          <ExclamationTriangleIcon width={16} height={16} className="shrink-0" />
-          <span>请切换到 Sepolia 测试网</span>
-          <button
+        <Tooltip title="请切换到 Sepolia 测试网">
+          <Button
+            type="primary"
+            danger
+            icon={<WarningOutlined />}
             onClick={switchToSepolia}
-            className="ml-2 text-yellow-800 underline hover:no-underline"
+            style={{ height: 48, borderRadius: 12 }}
           >
-            切换
-          </button>
-        </div>
+            错误网络
+          </Button>
+        </Tooltip>
       )}
 
-      <div className="flex items-center gap-3">
-        {/* 网络指示器 */}
-        <div className="flex items-center gap-2 bg-white/20 px-3 py-2 rounded-lg backdrop-blur-sm">
-          <div className={`w-2 h-2 rounded-full ${isWrongNetwork ? 'bg-red-500' : 'bg-green-500'}`} />
-          <span className="text-white text-sm font-medium">
-            {isWrongNetwork ? '错误网络' : 'Sepolia'}
-          </span>
-        </div>
+      <Badge dot color={isWrongNetwork ? 'red' : 'green'}>
+        <Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
+          Sepolia
+        </Text>
+      </Badge>
 
-        {/* 钱包信息 */}
-        <div className="relative">
-          <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 backdrop-blur-sm shadow-sm"
-          >
-            <WalletIcon width={16} height={16} className="shrink-0" />
-            <div className="text-left">
-              <div className="text-sm">{formatAddress(walletInfo.address)}</div>
-              <div className="text-xs opacity-80">{formatBalance(walletInfo.balance)} ETH</div>
+      <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+        <Button
+          size="large"
+          style={{
+            background: 'rgba(255, 255, 255, 0.2)',
+            borderColor: 'rgba(255, 255, 255, 0.3)',
+            color: '#ffffff',
+            fontWeight: 500,
+            height: 48,
+            borderRadius: 12,
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <Space>
+            <WalletOutlined />
+            <div>
+              <Text style={{ color: '#ffffff' }}>{formatAddress(walletInfo.address)}</Text><br />
+              <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>{formatBalance(walletInfo.balance)} ETH</Text>
             </div>
-            <ChevronDownIcon width={16} height={16} className="shrink-0" />
-          </button>
-
-          {/* 下拉菜单 */}
-          {showDropdown && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10">
-              <div className="px-4 py-2 border-b border-gray-100">
-                <div className="text-sm text-gray-600">钱包地址</div>
-                <div className="font-mono text-sm">{walletInfo.address}</div>
-              </div>
-              <div className="px-4 py-2 border-b border-gray-100">
-                <div className="text-sm text-gray-600">余额</div>
-                <div className="font-medium">{formatBalance(walletInfo.balance)} ETH</div>
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(walletInfo.address);
-                  setShowDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-50 text-sm"
-              >
-                复制地址
-              </button>
-              <button
-                onClick={() => {
-                  window.open(`https://sepolia.etherscan.io/address/${walletInfo.address}`, '_blank');
-                  setShowDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-50 text-sm"
-              >
-                在 Etherscan 查看
-              </button>
-              <button
-                onClick={() => {
-                  disconnectWallet();
-                  setShowDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-50 text-sm text-red-600"
-              >
-                断开连接
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 点击外部关闭下拉菜单 */}
-      {showDropdown && (
-        <div
-          className="fixed inset-0 z-0"
-          onClick={() => setShowDropdown(false)}
-        />
-      )}
-    </div>
+            <DownOutlined />
+          </Space>
+        </Button>
+      </Dropdown>
+    </Space>
   );
 };
 
