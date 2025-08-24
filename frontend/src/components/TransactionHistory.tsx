@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../hooks/useWeb3';
 import { ClockIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { Card, Empty, Typography } from 'antd';
 
 interface Transaction {
   hash: string;
@@ -32,28 +33,8 @@ const TransactionHistory: React.FC = () => {
       
       // 获取最新区块号
       const latestBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 1000); // 查询最近1000个区块
 
-      // 获取发送的交易
-      const sentFilter = {
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          null, // 任何事件
-          ethers.zeroPadValue(walletInfo.address, 32), // from address
-        ],
-      };
-
-      // 获取接收的交易
-      const receivedFilter = {
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          null, // 任何事件
-          null,
-          ethers.zeroPadValue(walletInfo.address, 32), // to address
-        ],
-      };
+      // 预留过滤器（如后续切换为日志订阅可启用）
 
       // 使用 Etherscan API 获取交易历史（更可靠的方法）
       const apiKey = import.meta.env.VITE_ETHERSCAN_API_KEY || 'YourApiKeyToken';
@@ -148,14 +129,19 @@ const TransactionHistory: React.FC = () => {
 
   if (!walletInfo.isConnected) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <ClockIcon width={16} height={16} className="shrink-0" />
-        </h3>
-        <div className="text-center text-gray-500 py-8">
-          请先连接钱包查看交易历史
-        </div>
-      </div>
+      <Card
+        style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          border: 'none',
+          borderRadius: 16,
+          boxShadow: '0 8px 24px rgba(102,126,234,0.12)'
+        }}
+      >
+        <Empty
+          description={<Typography.Text type="secondary">请先连接钱包查看交易历史</Typography.Text>}
+          imageStyle={{ height: 60, opacity: 0.9 }}
+        />
+      </Card>
     );
   }
 

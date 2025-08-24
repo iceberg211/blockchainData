@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useWeb3 } from '../hooks/useWeb3';
 import { Button, Dropdown, Card, Space, Typography, Badge, Modal, Alert, Tooltip, message } from 'antd';
+import type { MenuProps } from 'antd';
 import { WalletOutlined, DownOutlined, CopyOutlined, LinkOutlined, DisconnectOutlined, WarningOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -44,15 +45,7 @@ const WalletConnection: React.FC = () => {
           icon={<WalletOutlined />}
           loading={isConnecting}
           onClick={() => setShowWalletModal(true)}
-          style={{
-            background: 'rgba(255, 255, 255, 0.2)',
-            borderColor: 'rgba(255, 255, 255, 0.3)',
-            color: '#ffffff',
-            fontWeight: 600,
-            height: 48,
-            borderRadius: 12,
-            backdropFilter: 'blur(10px)',
-          }}
+          style={{ height: 48, borderRadius: 12, fontWeight: 600 }}
         >
           {isConnecting ? '连接中...' : '连接钱包'}
         </Button>
@@ -92,7 +85,7 @@ const WalletConnection: React.FC = () => {
     );
   }
 
-  const menuItems = [
+  const menuItems: MenuProps['items'] = [
     {
       key: 'copy',
       icon: <CopyOutlined />,
@@ -105,9 +98,7 @@ const WalletConnection: React.FC = () => {
       label: '在 Etherscan 查看',
       onClick: handleViewOnEtherscan,
     },
-    {
-      type: 'divider',
-    },
+    { type: 'divider' },
     {
       key: 'disconnect',
       icon: <DisconnectOutlined />,
@@ -134,29 +125,18 @@ const WalletConnection: React.FC = () => {
       )}
 
       <Badge dot color={isWrongNetwork ? 'red' : 'green'}>
-        <Text style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>
+        <Text style={{ color: 'rgba(17, 24, 39, 0.85)', fontWeight: 500 }}>
           Sepolia
         </Text>
       </Badge>
 
       <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-        <Button
-          size="large"
-          style={{
-            background: 'rgba(255, 255, 255, 0.2)',
-            borderColor: 'rgba(255, 255, 255, 0.3)',
-            color: '#ffffff',
-            fontWeight: 500,
-            height: 48,
-            borderRadius: 12,
-            backdropFilter: 'blur(10px)',
-          }}
-        >
+        <Button size="large" style={{ height: 48, borderRadius: 12 }}>
           <Space>
             <WalletOutlined />
             <div>
-              <Text style={{ color: '#ffffff' }}>{formatAddress(walletInfo.address)}</Text><br />
-              <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 12 }}>{formatBalance(walletInfo.balance)} ETH</Text>
+              <Text style={{ color: '#111827' }}>{formatAddress(walletInfo.address)}</Text><br />
+              <Text style={{ color: 'rgba(17, 24, 39, 0.65)', fontSize: 12 }}>{formatBalance(walletInfo.balance)} ETH</Text>
             </div>
             <DownOutlined />
           </Space>

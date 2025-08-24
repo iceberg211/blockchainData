@@ -143,7 +143,7 @@ const ContractInteraction: React.FC = () => {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <DocumentTextIcon className="w-5 h-5" />
+          <DocumentTextIcon width={18} height={18} />
           智能合约日志方式
         </h3>
         <div className="text-center py-8">
@@ -170,7 +170,7 @@ const ContractInteraction: React.FC = () => {
       {/* 合约交互表单 */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <DocumentTextIcon className="w-5 h-5" />
+          <DocumentTextIcon width={18} height={18} />
           智能合约数据存储
         </h3>
 
@@ -260,7 +260,7 @@ const ContractInteraction: React.FC = () => {
               </>
             ) : (
               <>
-                <DocumentTextIcon className="w-4 h-4" />
+                <DocumentTextIcon width={18} height={18} />
                 存储到合约
               </>
             )}

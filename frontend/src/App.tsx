@@ -115,66 +115,67 @@ function App() {
     <ConfigProvider theme={theme}>
       <Web3ReactProvider getLibrary={getLibrary}>
         <Layout className="min-h-screen">
-          {/* 背景渐变 */}
-          <div
-            className="fixed inset-0 -z-10"
-            style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            }}
-          />
+          {/* 现代化背景层 */}
+          <div className="fixed inset-0 -z-10 app-bg" />
+          <div className="fixed inset-0 -z-10 app-grid" />
+          <div className="app-blob app-blob-1" />
+          <div className="app-blob app-blob-2" />
 
           {/* 头部导航 */}
           <Header
-            className="backdrop-blur-md border-b border-white border-opacity-20"
+            className="backdrop-blur-md"
             style={{
-              background: 'rgba(255, 255, 255, 0.1)',
+              background: 'rgba(255, 255, 255, 0.85)',
               height: 80,
               display: 'flex',
               alignItems: 'center',
               padding: '0 24px',
+              borderBottom: '1px solid rgba(17,24,39,0.06)',
+              boxShadow: '0 6px 24px rgba(17, 24, 39, 0.05)'
             }}
           >
             <div className="flex items-center justify-between w-full max-w-7xl mx-auto">
-              <Space size="large" align="center">
-                <div className="flex items-center gap-3">
-                  <RocketOutlined
+              {/* 左侧：精简为图标 + 文案，增加留白 */}
+              <div className="flex items-center gap-5">
+                <RocketOutlined
+                  style={{
+                    fontSize: 32,
+                    color: '#667eea',
+                    background: 'rgba(102, 126, 234, 0.12)',
+                    padding: 8,
+                    borderRadius: 12,
+                  }}
+                />
+                <div style={{ lineHeight: 1.2 }}>
+                  <Title
+                    level={3}
                     style={{
-                      fontSize: 32,
-                      color: '#ffffff',
-                      background: 'rgba(255, 255, 255, 0.2)',
-                      padding: 8,
-                      borderRadius: 12,
+                      color: '#111827',
+                      margin: 0,
+                      fontWeight: 700,
+                      fontSize: 24,
+                      lineHeight: 1.2,
                     }}
-                  />
-                  <div>
-                    <Title
-                      level={2}
-                      style={{
-                        color: '#ffffff',
-                        margin: 0,
-                        fontWeight: 700,
-                        fontSize: 28
-                      }}
-                    >
-                      数据上链系统
-                    </Title>
-                    <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 14 }}>
-                      去中心化数据存储平台
-                    </Text>
-                  </div>
+                  >
+                    数据上链系统
+                  </Title>
+                  <Text style={{ color: 'rgba(17, 24, 39, 0.65)', fontSize: 14, marginTop: 4, display: 'block' }}>
+                    去中心化数据存储平台
+                  </Text>
                 </div>
-
+              </div>
+              {/* 右侧：网络标识 + 钱包入口 */}
+              <Space size="large" align="center">
                 <Badge
                   status="success"
                   text={
-                    <Text style={{ color: '#ffffff', fontWeight: 500 }}>
+                    <Text style={{ color: 'rgba(17, 24, 39, 0.85)', fontWeight: 500 }}>
                       Sepolia 测试网络
                     </Text>
                   }
                 />
+                <WalletConnection />
               </Space>
-
-              <WalletConnection />
             </div>
           </Header>
 

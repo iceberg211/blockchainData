@@ -3,6 +3,12 @@ import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import { connectorsByName, NETWORK_CONFIG, RPC_CONFIG } from '../config/web3';
 
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
+
 export interface WalletInfo {
   address: string;
   balance: string;
