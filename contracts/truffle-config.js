@@ -48,6 +48,20 @@ module.exports = {
       confirmations: 2,
       timeoutBlocks: 200,
       skipDryRun: true
+    },
+
+    // Sepolia 公共节点 (无需API Key)
+    sepolia_public: {
+      provider: () => new HDWalletProvider(
+        process.env.MNEMONIC || 'test test test test test test test test test test test junk',
+        'https://rpc.sepolia.org'
+      ),
+      network_id: 11155111,
+      gas: 4000000,
+      gasPrice: 20000000000, // 稍高的gas价格确保交易被处理
+      confirmations: 2,
+      timeoutBlocks: 200,
+      skipDryRun: true
     }
   },
 

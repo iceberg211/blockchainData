@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../hooks/useWeb3';
 import { DocumentTextIcon, ClockIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { Card, Form, Input, InputNumber, Button, Alert, Space, Typography } from 'antd';
 
 // 智能合约 ABI（简化版）
 const CONTRACT_ABI = [
@@ -27,11 +28,7 @@ interface ContractRecord {
 
 const ContractInteraction: React.FC = () => {
   const { walletInfo, getProvider } = useWeb3();
-  const [formData, setFormData] = useState({
-    recipient: '',
-    amount: '',
-    message: '',
-  });
+  const [form] = Form.useForm();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [txHash, setTxHash] = useState('');
@@ -88,20 +85,9 @@ const ContractInteraction: React.FC = () => {
     fetchRecords();
   }, [walletInfo.address]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFinish = async (values: { recipient: string; amount?: number; message: string }) => {
     if (!isContractDeployed) {
       setError('智能合约尚未部署');
-      return;
-    }
-
-    if (!formData.recipient || !ethers.isAddress(formData.recipient)) {
-      setError('请输入有效的收款地址');
-      return;
-    }
-
-    if (!formData.message.trim()) {
-      setError('请输入数据消息');
       return;
     }
 
@@ -111,32 +97,20 @@ const ContractInteraction: React.FC = () => {
 
     try {
       const contract = getSignedContract();
-      const amount = formData.amount ? ethers.parseEther(formData.amount) : 0;
+      const valueWei = values.amount ? ethers.parseEther(String(values.amount)) : 0n;
 
-      const tx = await contract.storeData(formData.recipient, formData.message, {
-        value: amount,
-      });
-
+      const tx = await contract.storeData(values.recipient, values.message, { value: valueWei });
       setTxHash(tx.hash);
       await tx.wait();
 
-      // 重新获取记录
       await fetchRecords();
-      
-      // 重置表单
-      setFormData({ recipient: '', amount: '', message: '' });
-      
+      form.resetFields();
     } catch (err: any) {
       console.error('Contract interaction failed:', err);
       setError(err.message || '合约调用失败');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (error) setError('');
   };
 
   if (!isContractDeployed) {

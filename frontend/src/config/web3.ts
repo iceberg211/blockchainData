@@ -53,6 +53,10 @@ export const connectorsByName = {
 // 常用合约地址
 export const CONTRACT_ADDRESSES = {
   // 将在部署后更新
-  DATA_STORAGE: '',
-  USDT_SEPOLIA: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06', // USDT on Sepolia
+  DATA_STORAGE: "0x2355909D2634102553029051Db2C4AC368C2EF0D",
+  TOKENS: {
+    USDT: "0x7169D38820dfd117C3FA1f22a697dBA58d90BA06", // USDT on Sepolia
+    DAI: "0x...", // 示例: DAI on Sepolia
+    LINK: "0x...", // 示例: LINK on Sepolia
+  },
 };

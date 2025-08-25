@@ -18,6 +18,7 @@
     "@web3-react/injected-connector": "^6.0.7",
     "@web3-react/walletconnect-connector": "^6.2.13",
     "antd": "^5.27.1",
+    "dayjs": "^1.11.13",
     "ethers": "^6.15.0",
     "graphql": "^16.11.0",
     "react": "^19.1.1",

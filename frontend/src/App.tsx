@@ -71,44 +71,6 @@ function App() {
       ),
       children: <ContractInteraction />,
     },
-    {
-      key: '3',
-      label: (
-        <Space size="small">
-          <DollarOutlined />
-          <span>USDT方式</span>
-          <Badge count="敬请期待" size="small" />
-        </Space>
-      ),
-      children: (
-        <Card
-          className="text-center"
-          style={{
-            minHeight: 400,
-            background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-            border: 'none'
-          }}
-        >
-          <div style={{ padding: '60px 20px' }}>
-            <DollarOutlined
-              style={{
-                fontSize: 64,
-                color: '#667eea',
-                marginBottom: 24,
-                opacity: 0.6
-              }}
-            />
-            <Title level={3} style={{ color: '#667eea', marginBottom: 8 }}>
-              USDT 转账功能
-            </Title>
-            <Text type="secondary" style={{ fontSize: 16 }}>
-              将在后续版本中提供完整的 USDT 代币转账功能
-            </Text>
-          </div>
-        </Card>
-      ),
-      disabled: true,
-    },
   ];
 
   return (
@@ -339,14 +301,14 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <DollarOutlined style={{ fontSize: 24, color: '#7c3aed' }} />
                         <Title level={4} style={{ margin: 0, color: '#7c3aed' }}>
-                          USDT 转账
+                          代币转账
                         </Title>
                       </div>
                       <ul style={{ color: '#6b21a8', margin: 0, paddingLeft: 20 }}>
                         <li>ERC-20 代币支持</li>
+                        <li>交易批准机制</li>
+                        <li>自动 Gas 估算</li>
                         <li>多网络兼容</li>
-                        <li>即将推出功能</li>
-                        <li>敬请期待更新</li>
                       </ul>
                     </Space>
                   </Card>
