@@ -1,0 +1,25 @@
+specVersion: 0.0.5
+schema:
+  file: schema.graphql
+dataSources:
+  - kind: ethereum
+    name: DataStorage
+    network: sepolia
+    source:
+      address: "0x2355909D2634102553029051Db2C4AC368C2EF0D"
+      abi: DataStorage
+      startBlock: 6164000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - DataRecord
+      abis:
+        - name: DataStorage
+          file: DataStorage/DataStorage.json
+      eventHandlers:
+        - event: DataStored(indexed uint256,indexed address,indexed
+            address,uint256,string,bytes32,uint256)
+          handler: handleDataStored
+      file: DataStorage/DataStorage.wasm

@@ -1,0 +1,13 @@
+type DataRecord @entity(immutable: true) {
+  id: ID! # 交易哈希 + 日志索引
+  recordId: BigInt! @index
+  sender: Bytes! @index
+  recipient: Bytes! @index
+  amount: BigInt!
+  message: String!
+  dataHash: Bytes!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
