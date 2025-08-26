@@ -67,7 +67,11 @@ const ContractInteraction: React.FC = () => {
     data,
     refetch,
   } = useQuery(GET_DATA_RECORDS, {
-    pollInterval: 15000, // 每15秒轮询一次新数据
+    variables: { first: 200, skip: 0 },
+    // 初次加载一次即可；确认成功后在代码中手动 refetch，避免闪烁
+    fetchPolicy: 'cache-first',
+    nextFetchPolicy: 'cache-first',
+    notifyOnNetworkStatusChange: false,
   });
 
   const getSignedContract = async () => {
@@ -75,6 +79,19 @@ const ContractInteraction: React.FC = () => {
     const signer = await provider.getSigner();
     return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
   };
+
+  const [onchainTotal, setOnchainTotal] = useState<number | null>(null);
+  // 对比链上总记录数，帮助判断是子图还是写入问题
+  useEffect(() => {
+    (async () => {
+      try {
+        const provider = getProvider();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        const total: bigint = await contract.getTotalRecords();
+        setOnchainTotal(Number(total));
+      } catch {}
+    })();
+  }, [walletInfo.chainId]);
 
   // 检查合约是否已部署
   const isContractDeployed =
@@ -296,7 +313,7 @@ const ContractInteraction: React.FC = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         <h4 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <ClockIcon width={20} height={20} />
-          合约记录 (总计: {data?.dataRecords?.length || 0})
+          合约记录 (子图: {data?.dataRecords?.length || 0}{onchainTotal !== null ? ` / 链上: ${onchainTotal}` : ''})
         </h4>
 
         {isQueryLoading && (

@@ -1,5 +1,5 @@
 import { useWeb3React, UnsupportedChainIdError } from "@web3-react/core";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ethers } from "ethers";
 import {
   connectorsByName,
@@ -222,14 +222,12 @@ export const useWeb3 = () => {
     };
   }, [library]);
 
-  // 创建 Provider
-  const getProvider = () => {
+  // 创建 Provider（memoized，避免子组件 effect 因函数引用变化而反复触发）
+  const getProvider = useCallback(() => {
     if (library) return library;
-
-    // 备用 Provider
     const rpcUrl = RPC_CONFIG.SEPOLIA_RPC || "https://rpc.sepolia.org";
     return new ethers.JsonRpcProvider(rpcUrl);
-  };
+  }, [library]);
 
   return {
     walletInfo,

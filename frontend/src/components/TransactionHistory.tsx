@@ -23,11 +23,64 @@ interface Transaction {
 }
 
 const TransactionHistory: React.FC = () => {
-  const { walletInfo } = useWeb3();
+  const { walletInfo, getProvider } = useWeb3();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [missingKey, setMissingKey] = useState(false);
+  const [usingLocalRecent, setUsingLocalRecent] = useState(false);
+
+  const fetchFromLocalRecent = useCallback(async () => {
+    // 使用本地最近交易哈希 + RPC 查询详情（通过 Infura 等 Provider）
+    setUsingLocalRecent(true);
+    try {
+      const raw = localStorage.getItem('recentTxs');
+      const hashes: string[] = raw ? JSON.parse(raw) : [];
+      if (!hashes || hashes.length === 0) {
+        setTransactions([]);
+        return;
+      }
+      const provider = getProvider();
+      const results = await Promise.all(
+        hashes.slice(0, 20).map(async (h) => {
+          try {
+            const tx = await provider.getTransaction(h);
+            if (!tx) return null;
+            let timestamp = 0;
+            let status: number | undefined = undefined;
+            if (tx.blockNumber) {
+              const [block, receipt] = await Promise.all([
+                provider.getBlock(tx.blockNumber),
+                provider.getTransactionReceipt(h).catch(() => undefined),
+              ]);
+              timestamp = Number(block?.timestamp ?? 0) * 1000; // ms
+              if (receipt && typeof receipt.status === 'number') {
+                status = receipt.status;
+              }
+            }
+            const valueEth = tx.value ? ethers.formatEther(tx.value) : '0';
+            return {
+              hash: h,
+              from: tx.from || walletInfo.address,
+              to: tx.to || '',
+              value: valueEth,
+              timestamp: Math.floor(timestamp / 1000),
+              data: (tx as any).data || '0x',
+              status,
+            } as Transaction;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const list = results.filter(Boolean) as Transaction[];
+      setTransactions(list);
+      setError('');
+    } catch (e) {
+      setTransactions([]);
+      setError('无法从本地记录获取交易详情');
+    }
+  }, [getProvider, walletInfo.address]);
 
   const fetchTransactions = useCallback(async () => {
     if (!walletInfo.address) return;
@@ -40,16 +93,16 @@ const TransactionHistory: React.FC = () => {
         (import.meta.env as any).VITE_ETHERSCAN_API_KEY ||
         (import.meta.env as any).VITE_ETHERSCAN_KEY ||
         '';
-      if (!apiKey) {
+      if (!apiKey || String(apiKey).toLowerCase() === 'yourapikeytoken') {
         setMissingKey(true);
-        setTransactions([]);
+        await fetchFromLocalRecent();
         setIsLoading(false);
         return;
       } else {
         setMissingKey(false);
       }
 
-      const apiUrl = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${walletInfo.address}&startblock=0&endblock=99999999&page=1&offset=20&sort=desc&apikey=${apiKey}`;
+      const apiUrl = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${walletInfo.address}&startblock=100000&endblock=99999999&page=1&offset=20&sort=desc&apikey=${apiKey}`;
       const response = await fetch(apiUrl);
       const data = await response.json();
 
@@ -64,18 +117,20 @@ const TransactionHistory: React.FC = () => {
           status: tx.txreceipt_status === '1' ? 1 : 0,
         }));
         setTransactions(txs);
-      } else if (data.message === 'NOTOK' && data.result.includes('Invalid API Key')) {
-        setError('无效的 Etherscan API Key，请检查配置。');
+      } else if (data.message === 'NOTOK' && data.result?.includes?.('Invalid API Key')) {
+        setError('无效的 Etherscan API Key，已回退为本地最近记录。');
+        await fetchFromLocalRecent();
       } else {
         setTransactions([]); // No transactions found
       }
     } catch (err: any) {
       console.error('Failed to fetch transactions:', err);
-      setError('获取交易历史失败，请检查网络连接。');
+      setError('获取交易历史失败，已回退为本地最近记录。');
+      await fetchFromLocalRecent();
     } finally {
       setIsLoading(false);
     }
-  }, [walletInfo.address]);
+  }, [walletInfo.address, fetchFromLocalRecent]);
 
   useEffect(() => {
     if (walletInfo.isConnected) {
