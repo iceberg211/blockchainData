@@ -1,12 +1,26 @@
-import React, { useState } from 'react';
-import { ethers } from 'ethers';
-import { useWeb3 } from '../hooks/useWeb3';
-import { DocumentTextIcon, ClockIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
-import { Form, Input, InputNumber, Button, Alert, Tooltip, Spin, Empty } from 'antd';
-import { useQuery } from '@apollo/client';
-import { CONTRACT_ADDRESSES } from '../config/web3';
-import DataStorageABI from '../config/abi/DataStorage.abi.json';
-import { GET_DATA_RECORDS } from '../graphql/queries';
+import React, { useState } from "react";
+import { ethers } from "ethers";
+import { useWeb3 } from "../hooks/useWeb3";
+import {
+  DocumentTextIcon,
+  ClockIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
+import {
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Button,
+  Alert,
+  Tooltip,
+  Spin,
+  Empty,
+} from "antd";
+import { useQuery } from "@apollo/client";
+import { CONTRACT_ADDRESSES } from "../config/web3";
+import DataStorageABI from "../config/abi/DataStorage.abi.json";
+import { GET_DATA_RECORDS } from "../graphql/queries";
 
 // 从配置文件中读取合约地址和 ABI
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DATA_STORAGE;
@@ -27,11 +41,16 @@ const ContractInteraction: React.FC = () => {
   const { walletInfo, getProvider } = useWeb3();
   const [form] = Form.useForm();
   const [isTxLoading, setIsTxLoading] = useState(false);
-  const [txError, setTxError] = useState('');
-  const [txHash, setTxHash] = useState('');
+  const [txError, setTxError] = useState("");
+  const [txHash, setTxHash] = useState("");
 
   // 使用Apollo useQuery从子图获取数据
-  const { loading: isQueryLoading, error: queryError, data, refetch } = useQuery(GET_DATA_RECORDS, {
+  const {
+    loading: isQueryLoading,
+    error: queryError,
+    data,
+    refetch,
+  } = useQuery(GET_DATA_RECORDS, {
     pollInterval: 15000, // 每15秒轮询一次新数据
   });
 
@@ -42,23 +61,32 @@ const ContractInteraction: React.FC = () => {
   };
 
   // 检查合约是否已部署
-  const isContractDeployed = CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
+  const isContractDeployed =
+    CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
-  const handleFinish = async (values: { recipient: string; amount?: number; message: string }) => {
+  const handleFinish = async (values: {
+    recipient: string;
+    amount?: number;
+    message: string;
+  }) => {
     if (!isContractDeployed) {
-      setTxError('智能合约尚未部署');
+      setTxError("智能合约尚未部署");
       return;
     }
 
     setIsTxLoading(true);
-    setTxError('');
-    setTxHash('');
+    setTxError("");
+    setTxHash("");
 
     try {
       const contract = getSignedContract();
-      const valueWei = values.amount ? ethers.parseEther(String(values.amount)) : 0n;
+      const valueWei = values.amount
+        ? ethers.parseEther(String(values.amount))
+        : 0n;
 
-      const tx = await contract.storeData(values.recipient, values.message, { value: valueWei });
+      const tx = await contract.storeData(values.recipient, values.message, {
+        value: valueWei,
+      });
       setTxHash(tx.hash);
       await tx.wait();
 
@@ -66,8 +94,8 @@ const ContractInteraction: React.FC = () => {
       await refetch();
       form.resetFields();
     } catch (err: any) {
-      console.error('Contract interaction failed:', err);
-      setTxError(err.message || '合约调用失败');
+      console.error("Contract interaction failed:", err);
+      setTxError(err.message || "合约调用失败");
     } finally {
       setIsTxLoading(false);
     }
@@ -100,7 +128,7 @@ const ContractInteraction: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <Card className="space-y-6">
       {/* 合约交互表单 */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -121,9 +149,12 @@ const ContractInteraction: React.FC = () => {
           <Form.Item
             label="数据消息"
             name="message"
-            rules={[{ required: true, message: '请输入需要上链的数据' }]}
+            rules={[{ required: true, message: "请输入需要上链的数据" }]}
           >
-            <Input.TextArea rows={3} placeholder="例如：订单号、证书哈希、或其他需要永久记录的文本..." />
+            <Input.TextArea
+              rows={3}
+              placeholder="例如：订单号、证书哈希、或其他需要永久记录的文本..."
+            />
           </Form.Item>
 
           <Form.Item
@@ -137,15 +168,17 @@ const ContractInteraction: React.FC = () => {
             }
             name="recipient"
             rules={[
-              { required: true, message: '请输入一个关联地址' },
+              { required: true, message: "请输入一个关联地址" },
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve();
                   try {
                     const ok = ethers.isAddress(value);
-                    return ok ? Promise.resolve() : Promise.reject(new Error('地址格式无效'));
+                    return ok
+                      ? Promise.resolve()
+                      : Promise.reject(new Error("地址格式无效"));
                   } catch {
-                    return Promise.reject(new Error('地址格式无效'));
+                    return Promise.reject(new Error("地址格式无效"));
                   }
                 },
               },
@@ -157,14 +190,19 @@ const ContractInteraction: React.FC = () => {
           <Form.Item
             label="附加ETH (可选)"
             name="amount"
-            rules={[{ type: 'number', min: 0, message: '请输入不小于 0 的金额' }]}
+            rules={[
+              { type: "number", min: 0, message: "请输入不小于 0 的金额" },
+            ]}
           >
-            <InputNumber placeholder="0.0" step={0.0001} min={0} style={{ width: '100%' }} />
+            <InputNumber
+              placeholder="0.0"
+              step={0.0001}
+              min={0}
+              style={{ width: "100%" }}
+            />
           </Form.Item>
 
-          {txError && (
-            <Alert message={txError} type="error" showIcon />
-          )}
+          {txError && <Alert message={txError} type="error" showIcon />}
 
           {txHash && (
             <div className="bg-green-50 p-3 rounded-md">
@@ -227,7 +265,10 @@ const ContractInteraction: React.FC = () => {
         {!isQueryLoading && !queryError && data?.dataRecords.length > 0 && (
           <div className="space-y-3 max-h-96 overflow-y-auto">
             {data.dataRecords.map((record: SubgraphRecord) => (
-              <div key={record.id} className="border border-gray-200 rounded-lg p-4">
+              <div
+                key={record.id}
+                className="border border-gray-200 rounded-lg p-4"
+              >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -235,25 +276,34 @@ const ContractInteraction: React.FC = () => {
                         记录 #{record.recordId}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(Number(record.timestamp) * 1000).toLocaleString('zh-CN')}
+                        {new Date(
+                          Number(record.timestamp) * 1000
+                        ).toLocaleString("zh-CN")}
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 text-sm mb-2">
                       <div>
                         <span className="text-gray-600">发送方: </span>
-                        <span className="font-mono">{record.sender.slice(0, 10)}...</span>
+                        <span className="font-mono">
+                          {record.sender.slice(0, 10)}...
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-600">接收方: </span>
-                        <span className="font-mono">{record.recipient.slice(0, 10)}...</span>
+                        <span className="font-mono">
+                          {record.recipient.slice(0, 10)}...
+                        </span>
                       </div>
                     </div>
 
                     {Number(ethers.formatEther(record.amount)) > 0 && (
                       <div className="text-sm mb-2">
                         <span className="text-gray-600">金额: </span>
-                        <span className="font-medium">{Number(ethers.formatEther(record.amount)).toFixed(4)} ETH</span>
+                        <span className="font-medium">
+                          {Number(ethers.formatEther(record.amount)).toFixed(4)}{" "}
+                          ETH
+                        </span>
                       </div>
                     )}
 
@@ -268,7 +318,7 @@ const ContractInteraction: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 };
 

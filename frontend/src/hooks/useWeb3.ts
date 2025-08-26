@@ -1,4 +1,4 @@
-import { useWeb3React } from '@web3-react/core';
+import { useWeb3React, UnsupportedChainIdError } from '@web3-react/core';
 import { useEffect, useState } from 'react';
 import { ethers } from 'ethers';
 import { connectorsByName, NETWORK_CONFIG, RPC_CONFIG } from '../config/web3';
@@ -31,9 +31,28 @@ export const useWeb3 = () => {
     setIsConnecting(true);
     try {
       const connector = connectorsByName[walletName];
-      await activate(connector);
-    } catch (err) {
-      console.error('Failed to connect wallet:', err);
+      // Force throwing so we can handle errors explicitly
+      await activate(connector, undefined, true);
+    } catch (err: any) {
+      // Handle unsupported network by switching to Sepolia and retrying
+      if (err instanceof UnsupportedChainIdError) {
+        try {
+          await switchToSepolia();
+          const connector = connectorsByName[walletName];
+          await activate(connector, undefined, true);
+          return;
+        } catch (switchErr) {
+          console.error('Failed to switch network and reconnect:', switchErr);
+        }
+      } else {
+        // For other errors, activate again without throwing so error state is populated
+        try {
+          const connector = connectorsByName[walletName];
+          await activate(connector);
+        } catch (innerErr) {
+          console.error('Failed to connect wallet:', innerErr);
+        }
+      }
     } finally {
       setIsConnecting(false);
     }
