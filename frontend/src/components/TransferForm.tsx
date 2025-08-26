@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../hooks/useWeb3';
 import { Button, Input, Form, Select, InputNumber, Spin, Alert, Typography, Space, message, Steps, Card } from 'antd';
-import { SendOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { SendOutlined, CheckCircleOutlined, LoadingOutlined } from '@ant-design/icons';
 import { CONTRACT_ADDRESSES } from '../config/web3';
 import ERC20_ABI from '../config/erc20.abi.json';
 
@@ -37,6 +37,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
   const [txHash, setTxHash] = useState('');
   const [approveTxHash, setApproveTxHash] = useState('');
   const [estimatedGas, setEstimatedGas] = useState<string | null>(null);
+  const [txStep, setTxStep] = useState<number | null>(null);
 
   const needsApproval = useMemo(() => {
     if (selectedToken === 'ETH') return false;
@@ -137,8 +138,9 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
       await tx.wait();
       message.success('批准成功！');
       await checkAllowance();
-    } catch (err: any) {
-      setError(err.message || '批准失败');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || '批准失败');
       message.error('批准失败');
     } finally {
       setIsApproving(false);
@@ -150,6 +152,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
     setError('');
     setTxHash('');
     setEstimatedGas(null);
+    setTxStep(0);
 
     try {
       const provider = getProvider();
@@ -163,7 +166,7 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
         };
         const estimatedGasLimit = await signer.estimateGas(txRequest);
         setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
-        
+
         const tx = await signer.sendTransaction({ ...txRequest, gasLimit: estimatedGasLimit });
         setTxHash(tx.hash);
         onTransactionSubmit?.(tx.hash);
@@ -173,20 +176,26 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
         const amountWei = ethers.parseUnits(values.amount, TOKENS[selectedToken].decimals);
 
-        const estimatedGasLimit = await contract.transfer.estimateGas(values.recipient, amountWei);
+        const txData = contract.interface.encodeFunctionData('transfer', [values.recipient, amountWei]);
+        const txRequest = { to: tokenAddress, data: txData };
+
+        const estimatedGasLimit = await signer.estimateGas(txRequest);
         setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
 
-        const tx = await contract.transfer(values.recipient, amountWei, { gasLimit: estimatedGasLimit });
+        const tx = await signer.sendTransaction({ ...txRequest, gasLimit: estimatedGasLimit });
         setTxHash(tx.hash);
         onTransactionSubmit?.(tx.hash);
         await tx.wait();
       }
 
+      setTxStep(1);
       message.success('交易成功！');
       form.resetFields();
       fetchTokenBalance();
-    } catch (err: any) {
-      setError(err.message || '转账失败');
+    } catch (err: unknown) {
+      setTxStep(null);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || '转账失败');
       message.error('转账失败');
     } finally {
       setIsLoading(false);
@@ -256,6 +265,17 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
           <Steps current={currentStep} style={{ marginBottom: 24 }}>
             <Steps.Step title="批准" description={approveTxHash ? <Link href={`https://sepolia.etherscan.io/tx/${approveTxHash}`} target="_blank">查看交易</Link> : '授权代币花费'} />
             <Steps.Step title="转账" description="发送代币" />
+          </Steps>
+        )}
+
+        {txStep !== null && (
+          <Steps size="small" current={txStep} style={{ marginBottom: 24 }}>
+            <Steps.Step
+              title="发送中"
+              icon={<LoadingOutlined />}
+              description={txHash ? <Link href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank">查看交易</Link> : '等待网络确认'}
+            />
+            <Steps.Step title="已确认" icon={<CheckCircleOutlined />} />
           </Steps>
         )}
 
