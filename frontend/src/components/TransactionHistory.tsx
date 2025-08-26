@@ -27,6 +27,7 @@ const TransactionHistory: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [missingKey, setMissingKey] = useState(false);
 
   const fetchTransactions = useCallback(async () => {
     if (!walletInfo.address) return;
@@ -35,11 +36,17 @@ const TransactionHistory: React.FC = () => {
     setError('');
 
     try {
-      const apiKey = import.meta.env.VITE_ETHERSCAN_API_KEY || 'YourApiKeyToken';
-      if (!apiKey || apiKey === 'YourApiKeyToken') {
-        setError('Etherscan API Key 未配置，无法获取交易历史。');
+      const apiKey =
+        (import.meta.env as any).VITE_ETHERSCAN_API_KEY ||
+        (import.meta.env as any).VITE_ETHERSCAN_KEY ||
+        '';
+      if (!apiKey) {
+        setMissingKey(true);
+        setTransactions([]);
         setIsLoading(false);
         return;
+      } else {
+        setMissingKey(false);
       }
 
       const apiUrl = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${walletInfo.address}&startblock=0&endblock=99999999&page=1&offset=20&sort=desc&apikey=${apiKey}`;
@@ -104,6 +111,20 @@ const TransactionHistory: React.FC = () => {
       title={<Space><ClockCircleOutlined />交易历史</Space>}
       extra={<Button icon={<SyncOutlined />} onClick={fetchTransactions} loading={isLoading}>刷新</Button>}
     >
+      {missingKey && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="未配置 Etherscan API Key"
+          description={
+            <span>
+              交易历史依赖 Etherscan API。请在前端环境变量中设置 <code>VITE_ETHERSCAN_API_KEY</code>（或 <code>VITE_ETHERSCAN_KEY</code>），然后重启开发服务。
+            </span>
+          }
+        />
+      )}
+
       {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
 
       {isLoading ? (

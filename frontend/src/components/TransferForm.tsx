@@ -147,7 +147,8 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
     }
   };
 
-  const handleFinish = async (values: { recipient: string; amount: string; message?: string }) => {
+  // 暂时去掉附加消息功能，仅发送普通转账
+  const handleFinish = async (values: { recipient: string; amount: string }) => {
     setIsLoading(true);
     setError('');
     setTxHash('');
@@ -162,7 +163,6 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
         const txRequest = {
           to: values.recipient,
           value: ethers.parseEther(values.amount),
-          data: values.message ? ethers.toUtf8Bytes(values.message) : '0x',
         };
         const estimatedGasLimit = await signer.estimateGas(txRequest);
         setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
@@ -251,7 +251,8 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
           </Text>
         </Form.Item>
 
-        {selectedToken === 'ETH' && (
+        {false && selectedToken === 'ETH' && (
+          // 已暂时下线留言功能
           <Form.Item name="message" label="数据留言 (仅ETH)">
             <Input.TextArea placeholder="可选" rows={3} />
           </Form.Item>

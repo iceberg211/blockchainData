@@ -16,6 +16,9 @@ import {
   Tooltip,
   Spin,
   Empty,
+  Steps,
+  List,
+  Tag,
 } from "antd";
 import { useQuery } from "@apollo/client";
 import { CONTRACT_ADDRESSES } from "../config/web3";
@@ -43,6 +46,9 @@ const ContractInteraction: React.FC = () => {
   const [isTxLoading, setIsTxLoading] = useState(false);
   const [txError, setTxError] = useState("");
   const [txHash, setTxHash] = useState("");
+  const [txStatus, setTxStatus] = useState<"idle" | "submitted" | "confirmed">("idle");
+  const [confirmations, setConfirmations] = useState(0);
+  const TARGET_CONFIRMATIONS = 2;
 
   // 使用Apollo useQuery从子图获取数据
   const {
@@ -54,9 +60,9 @@ const ContractInteraction: React.FC = () => {
     pollInterval: 15000, // 每15秒轮询一次新数据
   });
 
-  const getSignedContract = () => {
+  const getSignedContract = async () => {
     const provider = getProvider();
-    const signer = provider.getSigner();
+    const signer = await provider.getSigner();
     return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
   };
 
@@ -77,9 +83,11 @@ const ContractInteraction: React.FC = () => {
     setIsTxLoading(true);
     setTxError("");
     setTxHash("");
+    setTxStatus("idle");
+    setConfirmations(0);
 
     try {
-      const contract = getSignedContract();
+      const contract = await getSignedContract();
       const valueWei = values.amount
         ? ethers.parseEther(String(values.amount))
         : 0n;
@@ -88,11 +96,42 @@ const ContractInteraction: React.FC = () => {
         value: valueWei,
       });
       setTxHash(tx.hash);
-      await tx.wait();
+      setTxStatus("submitted");
 
-      // 交易成功后，刷新GraphQL查询
-      await refetch();
-      form.resetFields();
+      // 监听区块以更新确认数
+      const provider = getProvider();
+      let minedBlock: number | null = null;
+      const onBlock = async (blockNumber: number) => {
+        try {
+          const receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt && receipt.blockNumber) {
+            if (minedBlock === null) minedBlock = Number(receipt.blockNumber);
+            const conf = Math.max(0, Number(blockNumber) - minedBlock + 1);
+            setConfirmations(conf);
+            if (conf >= TARGET_CONFIRMATIONS) {
+              provider.off("block", onBlock);
+              setTxStatus("confirmed");
+              setIsTxLoading(false);
+              // 交易成功后，刷新GraphQL查询
+              await refetch();
+              form.resetFields();
+            }
+          }
+        } catch (e) {
+          // 忽略瞬时错误
+        }
+      };
+      provider.on("block", onBlock);
+
+      // 后备：即使监听异常，确保最终状态能被更新
+      tx.wait(TARGET_CONFIRMATIONS).then(async () => {
+        setConfirmations(TARGET_CONFIRMATIONS);
+        setTxStatus("confirmed");
+        setIsTxLoading(false);
+        await refetch();
+        form.resetFields();
+        provider.removeAllListeners && provider.removeAllListeners("block");
+      }).catch(() => {/* ignore */});
     } catch (err: any) {
       console.error("Contract interaction failed:", err);
       setTxError(err.message || "合约调用失败");
@@ -202,21 +241,38 @@ const ContractInteraction: React.FC = () => {
             />
           </Form.Item>
 
-          {txError && <Alert message={txError} type="error" showIcon />}
+          {txError && <Alert message={txError} type="error" showIcon style={{ marginBottom: 12 }} />}
 
           {txHash && (
-            <div className="bg-green-50 p-3 rounded-md">
-              <div className="text-sm text-green-800">
-                交易已提交:
-                <a
-                  href={`https://sepolia.etherscan.io/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 underline hover:no-underline font-mono"
-                >
-                  {txHash.slice(0, 10)}...{txHash.slice(-8)}
-                </a>
-              </div>
+            <div className="rounded-md" style={{ marginBottom: 12 }}>
+              <Steps
+                size="small"
+                current={txStatus === 'confirmed' ? 1 : 0}
+                items={[
+                  {
+                    title: '已提交',
+                    description: (
+                      <a
+                        href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono"
+                      >
+                        {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                      </a>
+                    ),
+                  },
+                  {
+                    title: txStatus === 'confirmed' ? '已确认' : '确认中',
+                    description:
+                      txStatus === 'confirmed' ? (
+                        <span>已获得 {TARGET_CONFIRMATIONS} 个确认</span>
+                      ) : (
+                        <span>已确认 {Math.min(confirmations, TARGET_CONFIRMATIONS)}/{TARGET_CONFIRMATIONS}</span>
+                      ),
+                  },
+                ]}
+              />
             </div>
           )}
 
@@ -263,59 +319,60 @@ const ContractInteraction: React.FC = () => {
         )}
 
         {!isQueryLoading && !queryError && data?.dataRecords.length > 0 && (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {data.dataRecords.map((record: SubgraphRecord) => (
-              <div
-                key={record.id}
-                className="border border-gray-200 rounded-lg p-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                        记录 #{record.recordId}
+          <List
+            itemLayout="vertical"
+            dataSource={data.dataRecords}
+            pagination={{ pageSize: 5 }}
+            renderItem={(record: SubgraphRecord) => {
+              const amountEth = Number(ethers.formatEther(record.amount));
+              const when = new Date(Number(record.timestamp) * 1000).toLocaleString('zh-CN');
+              return (
+                <List.Item
+                  key={record.id}
+                  actions={[
+                    <a
+                      key="view"
+                      href={`https://sepolia.etherscan.io/tx/${record.transactionHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      在 Etherscan 查看
+                    </a>,
+                  ]}
+                >
+                  <List.Item.Meta
+                    title={
+                      <span>
+                        记录 #{record.recordId} <Tag color="blue">{when}</Tag>
                       </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(
-                          Number(record.timestamp) * 1000
-                        ).toLocaleString("zh-CN")}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-2">
-                      <div>
-                        <span className="text-gray-600">发送方: </span>
-                        <span className="font-mono">
-                          {record.sender.slice(0, 10)}...
-                        </span>
+                    }
+                    description={
+                      <div style={{ fontSize: 12 }}>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>发送方: </span>
+                          <span className="font-mono">{record.sender.slice(0, 10)}...{record.sender.slice(-8)}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#6b7280' }}>接收方: </span>
+                          <span className="font-mono">{record.recipient.slice(0, 10)}...{record.recipient.slice(-8)}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-gray-600">接收方: </span>
-                        <span className="font-mono">
-                          {record.recipient.slice(0, 10)}...
-                        </span>
-                      </div>
+                    }
+                  />
+                  {amountEth > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ color: '#6b7280' }}>金额: </span>
+                      <strong>{amountEth.toFixed(4)} ETH</strong>
                     </div>
-
-                    {Number(ethers.formatEther(record.amount)) > 0 && (
-                      <div className="text-sm mb-2">
-                        <span className="text-gray-600">金额: </span>
-                        <span className="font-medium">
-                          {Number(ethers.formatEther(record.amount)).toFixed(4)}{" "}
-                          ETH
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="mt-2 p-2 bg-gray-100 rounded text-sm">
-                      <div className="text-gray-600 mb-1">数据消息:</div>
-                      <div className="break-all">{record.message}</div>
-                    </div>
+                  )}
+                  <div style={{ background: '#f3f4f6', padding: 12, borderRadius: 8 }}>
+                    <div style={{ color: '#6b7280', marginBottom: 4 }}>数据消息</div>
+                    <div style={{ wordBreak: 'break-all' }}>{record.message}</div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </List.Item>
+              );
+            }}
+          />
         )}
       </div>
     </Card>
