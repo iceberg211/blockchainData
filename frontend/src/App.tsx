@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from "react";
 import { Web3ReactProvider } from '@web3-react/core';
 import { ethers } from 'ethers';
 import { ConfigProvider, Layout, Tabs, Card, Badge, Typography, Space, Row, Col } from 'antd';
@@ -44,11 +44,30 @@ const theme = {
 };
 
 function App() {
-  const [recentTransactions, setRecentTransactions] = useState<string[]>([]);
+  // 最近交易持久化到 localStorage，刷新后保留
+  const [recentTransactions, setRecentTransactions] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('recentTxs');
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   const handleTransactionSubmit = (txHash: string) => {
-    setRecentTransactions(prev => [txHash, ...prev.slice(0, 4)]);
+    setRecentTransactions(prev => {
+      const next = [txHash, ...prev.filter(h => h !== txHash)].slice(0, 5);
+      try { localStorage.setItem('recentTxs', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
+
+  // 当列表变化时，同步到 localStorage（兜底）
+  // 注意：handleTransactionSubmit 已主动写入，这里作为保险
+  useEffect(() => {
+    try { localStorage.setItem('recentTxs', JSON.stringify(recentTransactions)); } catch {}
+  }, [recentTransactions]);
 
   const tabItems = [
     {

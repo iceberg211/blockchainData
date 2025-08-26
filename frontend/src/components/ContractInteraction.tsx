@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { useWeb3 } from "../hooks/useWeb3";
 import {
@@ -21,6 +21,7 @@ import {
   Tag,
 } from "antd";
 import { useQuery } from "@apollo/client";
+import { useTransactionProgress } from "../hooks/useTransactionProgress";
 import { CONTRACT_ADDRESSES } from "../config/web3";
 import DataStorageABI from "../config/abi/DataStorage.abi.json";
 import { GET_DATA_RECORDS } from "../graphql/queries";
@@ -45,10 +46,19 @@ const ContractInteraction: React.FC = () => {
   const [form] = Form.useForm();
   const [isTxLoading, setIsTxLoading] = useState(false);
   const [txError, setTxError] = useState("");
-  const [txHash, setTxHash] = useState("");
-  const [txStatus, setTxStatus] = useState<"idle" | "submitted" | "confirmed">("idle");
-  const [confirmations, setConfirmations] = useState(0);
-  const TARGET_CONFIRMATIONS = 2;
+  const {
+    status: txStatus,
+    confirmations,
+    txHash,
+    estimatedGasLimit,
+    estimatedFee,
+    isSpeedingUp,
+    estimate,
+    track,
+    speedUp,
+    reset: resetProgress,
+  } = useTransactionProgress(getProvider, { targetConfirmations: 2 });
+  // txStatus、confirmations 由 useTransactionProgress 管理
 
   // 使用Apollo useQuery从子图获取数据
   const {
@@ -82,63 +92,36 @@ const ContractInteraction: React.FC = () => {
 
     setIsTxLoading(true);
     setTxError("");
-    setTxHash("");
-    setTxStatus("idle");
-    setConfirmations(0);
+    resetProgress();
 
     try {
       const contract = await getSignedContract();
-      const valueWei = values.amount
-        ? ethers.parseEther(String(values.amount))
-        : 0n;
-
-      const tx = await contract.storeData(values.recipient, values.message, {
-        value: valueWei,
-      });
-      setTxHash(tx.hash);
-      setTxStatus("submitted");
-
-      // 监听区块以更新确认数
+      const valueWei = values.amount ? ethers.parseEther(String(values.amount)) : 0n;
+      // 使用 populateTransaction 生成可复用的 txRequest
+      const unsigned = await contract.storeData.populateTransaction(values.recipient, values.message, { value: valueWei });
       const provider = getProvider();
-      let minedBlock: number | null = null;
-      const onBlock = async (blockNumber: number) => {
-        try {
-          const receipt = await provider.getTransactionReceipt(tx.hash);
-          if (receipt && receipt.blockNumber) {
-            if (minedBlock === null) minedBlock = Number(receipt.blockNumber);
-            const conf = Math.max(0, Number(blockNumber) - minedBlock + 1);
-            setConfirmations(conf);
-            if (conf >= TARGET_CONFIRMATIONS) {
-              provider.off("block", onBlock);
-              setTxStatus("confirmed");
-              setIsTxLoading(false);
-              // 交易成功后，刷新GraphQL查询
-              await refetch();
-              form.resetFields();
-            }
-          }
-        } catch (e) {
-          // 忽略瞬时错误
-        }
-      };
-      provider.on("block", onBlock);
-
-      // 后备：即使监听异常，确保最终状态能被更新
-      tx.wait(TARGET_CONFIRMATIONS).then(async () => {
-        setConfirmations(TARGET_CONFIRMATIONS);
-        setTxStatus("confirmed");
-        setIsTxLoading(false);
-        await refetch();
-        form.resetFields();
-        provider.removeAllListeners && provider.removeAllListeners("block");
-      }).catch(() => {/* ignore */});
+      const signer = await provider.getSigner();
+      const { gasLimit } = await estimate(signer, unsigned);
+      const tx = await signer.sendTransaction({ ...unsigned, gasLimit });
+      await track(tx, { ...unsigned, gasLimit });
     } catch (err: any) {
       console.error("Contract interaction failed:", err);
       setTxError(err.message || "合约调用失败");
     } finally {
-      setIsTxLoading(false);
+      // isTxLoading 在确认时置为 false
     }
   };
+
+  // 根据进度更新加载与后续动作
+  useEffect(() => {
+    if (txStatus === 'submitted') {
+      setIsTxLoading(true);
+    } else if (txStatus === 'confirmed') {
+      setIsTxLoading(false);
+      refetch();
+      form.resetFields();
+    }
+  }, [txStatus]);
 
   if (!isContractDeployed) {
     return (
@@ -266,14 +249,32 @@ const ContractInteraction: React.FC = () => {
                     title: txStatus === 'confirmed' ? '已确认' : '确认中',
                     description:
                       txStatus === 'confirmed' ? (
-                        <span>已获得 {TARGET_CONFIRMATIONS} 个确认</span>
+                        <span>已获得 {2} 个确认</span>
                       ) : (
-                        <span>已确认 {Math.min(confirmations, TARGET_CONFIRMATIONS)}/{TARGET_CONFIRMATIONS}</span>
+                        <span>已确认 {confirmations}/2</span>
                       ),
                   },
                 ]}
               />
             </div>
+          )}
+
+          {(estimatedGasLimit || estimatedFee) && (
+            <Alert
+              type="info"
+              style={{ marginBottom: 12 }}
+              message={`预估 Gas: ${estimatedGasLimit ?? '-'} | 预估费用: ${estimatedFee ?? '-'} ETH`}
+            />
+          )}
+
+          {txHash && txStatus === 'submitted' && (
+            <Button onClick={async () => {
+              const provider = getProvider();
+              const signer = await provider.getSigner();
+              await speedUp(signer);
+            }} loading={isSpeedingUp} style={{ marginBottom: 12 }}>
+              加速交易
+            </Button>
           )}
 
           <Form.Item>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ethers } from 'ethers';
 import { useWeb3 } from '../hooks/useWeb3';
 import { Button, Input, Form, Select, InputNumber, Spin, Alert, Typography, Space, message, Steps, Card } from 'antd';
@@ -36,8 +36,17 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
   const [error, setError] = useState('');
   const [txHash, setTxHash] = useState('');
   const [approveTxHash, setApproveTxHash] = useState('');
-  const [estimatedGas, setEstimatedGas] = useState<string | null>(null);
+  const [estimatedGasLimit, setEstimatedGasLimit] = useState<string | null>(null);
+  const [estimatedFee, setEstimatedFee] = useState<string | null>(null);
   const [txStep, setTxStep] = useState<number | null>(null);
+  const [txStatus, setTxStatus] = useState<'idle' | 'submitted' | 'confirmed'>('idle');
+  const [confirmations, setConfirmations] = useState(0);
+  const TARGET_CONFIRMATIONS = 2;
+  const [isSpeedingUp, setIsSpeedingUp] = useState(false);
+  const [lastTxRequest, setLastTxRequest] = useState<any | null>(null);
+  const [lastTxNonce, setLastTxNonce] = useState<number | null>(null);
+  const blockListenerRef = useRef<((blockNumber: number) => void) | null>(null);
+  const providerRef = useRef<any>(null);
 
   const needsApproval = useMemo(() => {
     if (selectedToken === 'ETH') return false;
@@ -128,12 +137,16 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
 
       const amountToApprove = ethers.parseUnits(amount.toString(), TOKENS[selectedToken].decimals);
       
-      // Estimate gas for approval
-      const estimatedGasLimit = await contract.approve.estimateGas(recipient, amountToApprove);
-      setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
+      // Estimate gas for approval and fee
+      const gasLimit = await contract.approve.estimateGas(recipient, amountToApprove);
+      const feeData = await provider.getFeeData();
+      const price = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+      const feeWei = price * gasLimit;
+      setEstimatedGasLimit(gasLimit.toString());
+      setEstimatedFee(ethers.formatEther(feeWei));
 
-      const tx = await contract.approve(recipient, amountToApprove, { gasLimit: estimatedGasLimit });
-
+      const tx = await contract.approve(recipient, amountToApprove, { gasLimit });
+      
       setApproveTxHash(tx.hash);
       await tx.wait();
       message.success('批准成功！');
@@ -152,8 +165,11 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
     setIsLoading(true);
     setError('');
     setTxHash('');
-    setEstimatedGas(null);
+    setEstimatedGasLimit(null);
+    setEstimatedFee(null);
     setTxStep(0);
+    setTxStatus('idle');
+    setConfirmations(0);
 
     try {
       const provider = getProvider();
@@ -164,13 +180,49 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
           to: values.recipient,
           value: ethers.parseEther(values.amount),
         };
-        const estimatedGasLimit = await signer.estimateGas(txRequest);
-        setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
+        const gasLimit = await signer.estimateGas(txRequest);
+        const feeData = await (await getProvider()).getFeeData();
+        const price = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+        const feeWei = price * gasLimit;
+        setEstimatedGasLimit(gasLimit.toString());
+        setEstimatedFee(ethers.formatEther(feeWei));
 
-        const tx = await signer.sendTransaction({ ...txRequest, gasLimit: estimatedGasLimit });
+        const tx = await signer.sendTransaction({ ...txRequest, gasLimit });
         setTxHash(tx.hash);
         onTransactionSubmit?.(tx.hash);
-        await tx.wait();
+        setTxStatus('submitted');
+        setLastTxRequest({ ...txRequest, gasLimit });
+        setLastTxNonce(tx.nonce);
+
+        // Track confirmations
+        const provider = getProvider();
+        providerRef.current = provider;
+        let minedBlock: number | null = null;
+        const onBlock = async (blockNumber: number) => {
+          try {
+            const receipt = await provider.getTransactionReceipt(tx.hash);
+            if (receipt && receipt.blockNumber) {
+              if (minedBlock === null) minedBlock = Number(receipt.blockNumber);
+              const conf = Math.max(0, Number(blockNumber) - minedBlock + 1);
+              setConfirmations(conf);
+              if (conf >= TARGET_CONFIRMATIONS) {
+                provider.off('block', onBlock);
+                setTxStatus('confirmed');
+                setTxStep(1);
+                setIsLoading(false);
+              }
+            }
+          } catch {}
+        };
+        blockListenerRef.current = onBlock;
+        provider.on('block', onBlock);
+        tx.wait(TARGET_CONFIRMATIONS).then(() => {
+          setConfirmations(TARGET_CONFIRMATIONS);
+          setTxStatus('confirmed');
+          setTxStep(1);
+          setIsLoading(false);
+          provider.removeAllListeners && provider.removeAllListeners('block');
+        }).catch(() => {});
       } else {
         const tokenAddress = TOKENS[selectedToken].address;
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, signer);
@@ -179,26 +231,129 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
         const txData = contract.interface.encodeFunctionData('transfer', [values.recipient, amountWei]);
         const txRequest = { to: tokenAddress, data: txData };
 
-        const estimatedGasLimit = await signer.estimateGas(txRequest);
-        setEstimatedGas(ethers.formatUnits(estimatedGasLimit, 'gwei'));
+        const gasLimit = await signer.estimateGas(txRequest);
+        const feeData = await (await getProvider()).getFeeData();
+        const price = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+        const feeWei = price * gasLimit;
+        setEstimatedGasLimit(gasLimit.toString());
+        setEstimatedFee(ethers.formatEther(feeWei));
 
-        const tx = await signer.sendTransaction({ ...txRequest, gasLimit: estimatedGasLimit });
+        const tx = await signer.sendTransaction({ ...txRequest, gasLimit });
         setTxHash(tx.hash);
         onTransactionSubmit?.(tx.hash);
-        await tx.wait();
+        setTxStatus('submitted');
+        setLastTxRequest({ ...txRequest, gasLimit });
+        setLastTxNonce(tx.nonce);
+
+        const provider = getProvider();
+        providerRef.current = provider;
+        let minedBlock: number | null = null;
+        const onBlock = async (blockNumber: number) => {
+          try {
+            const receipt = await provider.getTransactionReceipt(tx.hash);
+            if (receipt && receipt.blockNumber) {
+              if (minedBlock === null) minedBlock = Number(receipt.blockNumber);
+              const conf = Math.max(0, Number(blockNumber) - minedBlock + 1);
+              setConfirmations(conf);
+              if (conf >= TARGET_CONFIRMATIONS) {
+                provider.off('block', onBlock);
+                setTxStatus('confirmed');
+                setTxStep(1);
+                setIsLoading(false);
+              }
+            }
+          } catch {}
+        };
+        blockListenerRef.current = onBlock;
+        provider.on('block', onBlock);
+        tx.wait(TARGET_CONFIRMATIONS).then(() => {
+          setConfirmations(TARGET_CONFIRMATIONS);
+          setTxStatus('confirmed');
+          setTxStep(1);
+          setIsLoading(false);
+          provider.removeAllListeners && provider.removeAllListeners('block');
+        }).catch(() => {});
       }
 
-      setTxStep(1);
-      message.success('交易成功！');
-      form.resetFields();
+      message.success('交易已提交');
+      form.resetFields(['amount']);
       fetchTokenBalance();
     } catch (err: unknown) {
       setTxStep(null);
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg || '转账失败');
       message.error('转账失败');
-    } finally {
       setIsLoading(false);
+    } finally {
+      // isLoading 在确认完成时置为 false；异常情况下在 catch 设置
+    }
+  };
+
+  const handleSpeedUp = async () => {
+    if (!lastTxRequest || lastTxNonce === null) return;
+    try {
+      setIsSpeedingUp(true);
+      const provider = getProvider();
+      const signer = await provider.getSigner();
+
+      // stop previous listener
+      if (providerRef.current && blockListenerRef.current) {
+        try { providerRef.current.off('block', blockListenerRef.current); } catch {}
+      }
+
+      // compute bumped fees
+      const feeData = await provider.getFeeData();
+      let txOverrides: any = { nonce: lastTxNonce };
+      if (feeData.maxFeePerGas || feeData.maxPriorityFeePerGas) {
+        const suggestedPriority = feeData.maxPriorityFeePerGas ?? 1n;
+        const suggestedMax = feeData.maxFeePerGas ?? suggestedPriority * 2n;
+        const bump = (v: bigint) => (v * 12n) / 10n + 1n; // +20%
+        txOverrides.maxPriorityFeePerGas = bump(suggestedPriority);
+        txOverrides.maxFeePerGas = bump(suggestedMax);
+      } else if (feeData.gasPrice) {
+        const bump = (v: bigint) => (v * 12n) / 10n + 1n;
+        txOverrides.gasPrice = bump(feeData.gasPrice);
+      }
+
+      const accelerated = await signer.sendTransaction({ ...lastTxRequest, ...txOverrides });
+      setTxHash(accelerated.hash);
+      setTxStatus('submitted');
+
+      // re-attach listener for new hash
+      providerRef.current = provider;
+      let minedBlock: number | null = null;
+      const onBlock = async (blockNumber: number) => {
+        try {
+          const receipt = await provider.getTransactionReceipt(accelerated.hash);
+          if (receipt && receipt.blockNumber) {
+            if (minedBlock === null) minedBlock = Number(receipt.blockNumber);
+            const conf = Math.max(0, Number(blockNumber) - minedBlock + 1);
+            setConfirmations(conf);
+            if (conf >= TARGET_CONFIRMATIONS) {
+              provider.off('block', onBlock);
+              setTxStatus('confirmed');
+              setTxStep(1);
+              setIsLoading(false);
+            }
+          }
+        } catch {}
+      };
+      blockListenerRef.current = onBlock;
+      provider.on('block', onBlock);
+      accelerated.wait(TARGET_CONFIRMATIONS).then(() => {
+        setConfirmations(TARGET_CONFIRMATIONS);
+        setTxStatus('confirmed');
+        setTxStep(1);
+        setIsLoading(false);
+        provider.removeAllListeners && provider.removeAllListeners('block');
+      }).catch(() => {});
+
+      message.success('已提交加速交易');
+    } catch (e) {
+      console.error('Speed up failed', e);
+      message.error('加速失败，请稍后重试');
+    } finally {
+      setIsSpeedingUp(false);
     }
   };
 
@@ -259,8 +414,14 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
         )}
 
         {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 24 }} />}
-        
-        {estimatedGas && <Alert message={`预估 Gas (Gwei): ${estimatedGas}`} type="info" style={{ marginBottom: 24 }} />}
+
+        {(estimatedGasLimit || estimatedFee) && (
+          <Alert
+            type="info"
+            style={{ marginBottom: 24 }}
+            message={`预估 Gas: ${estimatedGasLimit ?? '-'} | 预估费用: ${estimatedFee ?? '-'} ETH`}
+          />
+        )}
 
         {selectedToken !== 'ETH' && (
           <Steps current={currentStep} style={{ marginBottom: 24 }}>
@@ -269,15 +430,32 @@ const TransferForm: React.FC<TransferFormProps> = ({ onTransactionSubmit }) => {
           </Steps>
         )}
 
-        {txStep !== null && (
-          <Steps size="small" current={txStep} style={{ marginBottom: 24 }}>
+        {txHash && (
+          <Steps size="small" current={txStatus === 'confirmed' ? 1 : 0} style={{ marginBottom: 24 }}>
             <Steps.Step
-              title="发送中"
-              icon={<LoadingOutlined />}
-              description={txHash ? <Link href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank">查看交易</Link> : '等待网络确认'}
+              title="已提交"
+              description={
+                txHash ? (
+                  <Link href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank">查看交易</Link>
+                ) : (
+                  '等待广播'
+                )
+              }
             />
-            <Steps.Step title="已确认" icon={<CheckCircleOutlined />} />
+            <Steps.Step
+              title={txStatus === 'confirmed' ? '已确认' : '确认中'}
+              description={txStatus === 'confirmed' ? `已获得 ${TARGET_CONFIRMATIONS} 个确认` : `已确认 ${Math.min(confirmations, TARGET_CONFIRMATIONS)}/${TARGET_CONFIRMATIONS}`}
+              icon={txStatus === 'confirmed' ? <CheckCircleOutlined /> : <LoadingOutlined />}
+            />
           </Steps>
+        )}
+
+        {txHash && txStatus === 'submitted' && (
+          <Space style={{ marginBottom: 16 }}>
+            <Button onClick={handleSpeedUp} loading={isSpeedingUp}>
+              加速交易
+            </Button>
+          </Space>
         )}
 
         <Form.Item>
